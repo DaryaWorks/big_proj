@@ -8,7 +8,6 @@ taro/
 │   │   │   ├── __init__.py
 │   │   │   ├── start.py
 │   │   │   ├── commands.py
-│   │   │   ├── messages.py
 │   │   │   └── callbacks.py
 │   │   ├── keyboards/
 │   │   │   ├── __init__.py
