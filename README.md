@@ -1,52 +1,25 @@
 
 ```
-taro/
-├── src/
-│   ├── tg_bot/
-│   │   ├── __init__.py
-│   │   ├── handlers/
-│   │   │   ├── __init__.py
-│   │   │   ├── start.py
-│   │   │   ├── commands.py
-│   │   │   └── callbacks.py
-│   │   ├── keyboards/
-│   │   │   ├── __init__.py
-│   │   │   ├── main_menu.py
-│   │   │   └── inline.py
-│   │   ├── middlewares/
-│   │   │   ├── __init__.py
-│   │   │   └── throttling.py
-│   │   └── filters/
-│   │       ├── __init__.py
-│   │       └── custom_filters.py
-│   ├── database/
-│   │   ├── __init__.py
-│   │   ├── models.py
-│   │   ├── crud.py
-│   │   └── connection.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── api_client.py
-│   │   ├── payment.py
-│   │   └── notifications.py
-│   ├── utils/
-│   │   ├── __init__.py
-│   │   ├── helpers.py
-│   │   └── validators.py
-│   └── config.py
-├── data/
-│   ├── temp/
-│   └── logs/
-├── locales/ (для мультиязычности)
-│   ├── ru.json
-│   └── en.json
-├── tests/
-│   ├── __init__.py
-│   ├── test_handlers.py
-│   └── test_services.py
-├── requirements.txt
-├── .env.example
-├── .gitignore
-├── README.md
-└── main.py
+BIG_PROJ/
+├── model/ # Модуль для работы с моделями AI
+│ ├── init.py
+│ ├── config.py # Конфигурация модели (токены, настройки)
+│ ├── model.py # Основной код работы с моделью
+│ ├── generated_text.txt # Сгенерированные тексты
+│ └── pycache/
+├── tg_bot/ # Telegram бот
+│ ├── handlers/ # Обработчики сообщений
+│ ├── keyboards/ # Клавиатуры бота
+│ ├── logs/ # Логи бота
+│ ├── init.py
+│ ├── config.py # Конфигурация бота (токен, настройки)
+│ ├── IMG_1148.JPG # Изображение для бота
+│ ├── middlelwares.py # Middleware для бота
+│ ├── run.py # Запуск бота
+│ └── pycache/
+├── log/ # Общие логи проекта
+├── poetry.lock # Lock-файл зависимостей Poetry
+├── pyproject.toml # Конфигурация Poetry и зависимостей
+├── .gitignore # Git ignore правила
+└── README.md # Документация проекта
 ```

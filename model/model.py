@@ -25,11 +25,12 @@
 
 
 import os
+from config import HUGGINGFACEHUB_API_TOKEN
 from openai import OpenAI
 
 client = OpenAI(
     base_url="https://router.huggingface.co/v1",
-    api_key=os.environ["HF_TOKEN"],
+    api_key=HUGGINGFACEHUB_API_TOKEN,
 )
 
 completion = client.chat.completions.create(
@@ -37,7 +38,7 @@ completion = client.chat.completions.create(
     messages=[
         {
             "role": "user",
-            "content": "What is the capital of France?"
+            "content": "ты говоришь по русски?"
         }
     ],
 )
