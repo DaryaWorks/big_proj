@@ -4,13 +4,16 @@ from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 
+from typing import Dict
+
 import keyboards as kb
-from tg_bot.middlelwares import TestMiddleware
+from middlewares import ReadingLimiterMiddleware
 
 router = Router() 
 
-# для middleware 
-router.message.outer_middleware(TestMiddleware())
+# Инициализация middleware
+reading_limiter = ReadingLimiterMiddleware(max_readings=5, time_window=3600)
+router.message.outer_middleware(reading_limiter)
 
 # FSM для регистрации пользователя
 class Reg(StatesGroup):
@@ -24,42 +27,23 @@ class TarotReading(StatesGroup):
     confirming_reading = State()
 
 # обработчик команды старт
-# @router.message(CommandStart())
-# async def cmd_start(message: Message):
-#     welcome_text = f"""
-# ✨ Добро пожаловать, {message.from_user.first_name}! ✨
-
-# Я — ваш цифровой таролог. 🔮
-
-# Что я умею:
-# • Давать предсказания по картам Таро
-# • Проводить разные типы раскладов
-# • Помогать найти ответы на ваши вопросы
-
-# Выберите действие в меню ниже:
-#     """
-#     await message.answer_photo(
-#         photo="/Users/rabotyazheva/Desktop/big_proj/tg_bot/IMG_1148.JPG",
-#         caption=welcome_text,
-#         reply_markup=kb.main_reply  
-#     )
 @router.message(CommandStart())
 async def cmd_start(message: Message):
+    user_name = message.from_user.first_name if message.from_user else "Дорогая"
     welcome_text = f"""
-✨ Добро пожаловать, {message.from_user.first_name} ✨
+✨ Добро пожаловать, {user_name} ✨
 
 Я — твой личный таролог 🔮
 
 Что я умею:
 • Давать предсказания по картам Таро
-• Проводить разные типы раскладов на твоего тюбика
-• Помогать найти ответы на одни и те же вопросы
+• Проводить разные типы раскладов
+• Помогать найти ответы на ваши вопросы
 
 Выберите действие в меню ниже:
     """
     
     try:
-        # Правильное использование FSInputFile
         photo = FSInputFile("/Users/rabotyazheva/Desktop/big_proj/tg_bot/IMG_1148.JPG")
         
         await message.answer_photo(
@@ -68,7 +52,6 @@ async def cmd_start(message: Message):
             reply_markup=kb.main_reply  
         )
     except Exception as e:
-        # Если возникла ошибка с фото, отправляем только текст
         print(f"Ошибка при отправке фото: {e}")
         await message.answer(
             welcome_text,
@@ -78,11 +61,21 @@ async def cmd_start(message: Message):
 
 # Обработчики главного меню
 @router.message(F.text == '🔮 Получить предсказание')
-async def get_prediction(message: Message):
-    await message.answer(
-        "Выберите тип расклада:",
-        reply_markup=kb.spreads_main
-    )
+async def get_prediction_menu(message: Message):  # ← ПЕРЕИМЕНОВАНО
+    if not message.from_user:
+        return
+        
+    remaining = reading_limiter.get_remaining_readings(message.from_user.id)
+    
+    text = "Выберите тип расклада:"
+    if remaining == 1:
+        text += f"\n\n⚠️ *Остался последний расклад в этом часе*"
+    elif remaining == 0:
+        text += f"\n\n❌ *Лимит исчерпан*"
+    else:
+        text += f"\n\n🔮 *Осталось раскладов: {remaining}*"
+    
+    await message.answer(text, parse_mode="Markdown", reply_markup=kb.spreads_main)
 
 @router.message(F.text == '📚 О картах Таро')
 async def about_tarot(message: Message):
@@ -112,66 +105,101 @@ async def my_profile(message: Message):
         reply_markup=kb.profile_keyboard
     )
 
+# Обработчик для проверки оставшихся раскладов
+@router.message(F.text == '📊 Осталось раскладов')
+async def show_remaining_readings(message: Message):
+    if not message.from_user:
+        return
+        
+    remaining = reading_limiter.get_remaining_readings(message.from_user.id)
+    stats = reading_limiter.get_user_stats(message.from_user.id)
+    
+    text = (
+        f"🔮 *Статистика раскладов:*\n\n"
+        f"• Сделано сегодня: {stats['readings_count']}\n"
+        f"• Доступно: {stats['remaining']}/{stats['limit']}\n"
+        f"• Следующий сброс: через {stats['next_reading_in']}\n\n"
+        f"Используйте расклады с умом! 💫"
+    )
+    
+    await message.answer(text, parse_mode="Markdown")
+
 # Обработчики инлайн-кнопок для предсказаний
 @router.callback_query(F.data == 'get_prediction')
 async def process_prediction_callback(callback_query: CallbackQuery):
     await callback_query.answer()
-    await callback_query.message.edit_text(
-        "Выберите тип расклада:",
-        reply_markup=kb.spreads_main
-    )
+
+    if callback_query.message:
+        await callback_query.message.answer(
+            "Выберите тип расклада:",
+            reply_markup=kb.spreads_main
+        )
 
 @router.callback_query(F.data == 'about_tarot')
 async def process_about_tarot(callback_query: CallbackQuery):
     await callback_query.answer()
-    await callback_query.message.edit_text(
-        "🃏 *Карты Таро* — это древняя система символов, которая помогает:\n\n"
-        "• 💭 Лучше понять себя и свои желания\n"
-        "• 🔍 Увидеть скрытые аспекты ситуации\n"
-        "• 🧭 Найти направление для развития\n"
-        "• 🌟 Получить совет для принятия решений\n\n"
-        "Каждая карта — это архетип, несущий глубокий смысл и мудрость.",
-        parse_mode="Markdown",
-        reply_markup=kb.back_button
-    )
+
+    if callback_query.message:
+        await callback_query.message.answer(
+            "🃏 *Карты Таро* — это древняя система символов, которая помогает:\n\n"
+            "• 💭 Лучже понять себя и свои желания\n"
+            "• 🔍 Увидеть скрытые аспекты ситуации\n"
+            "• 🧭 Найти направление для развития\n"
+            "• 🌟 Получить совет для принятия решений\n\n"
+            "Каждая карта — это архетип, несущий глубокий смысл и мудрость.",
+            parse_mode="Markdown",
+            reply_markup=kb.back_button
+        )
 
 @router.callback_query(F.data == 'popular_spreads')
 async def process_popular_spreads(callback_query: CallbackQuery):
     await callback_query.answer()
-    await callback_query.message.edit_text(
-        "✨ Популярные расклады:",
-        reply_markup=await kb.inline_themes()
-    )
+
+    if callback_query.message:
+        await callback_query.message.answer(
+            "✨ Популярные расклады:",
+            reply_markup=await kb.inline_themes()
+        )
 
 @router.callback_query(F.data == 'profile')
 async def process_profile(callback_query: CallbackQuery):
     await callback_query.answer()
-    await callback_query.message.edit_text(
-        f"👤 *Ваш профиль*\n\n"
-        f"Имя: {callback_query.from_user.first_name}\n"
-        f"ID: {callback_query.from_user.id}\n\n"
-        f"📊 Статистика:\n"
-        f"• Раскладов сделано: 0\n"
-        f"• Избранных предсказаний: 0",
-        parse_mode="Markdown",
-        reply_markup=kb.profile_keyboard
-    )
+
+    if callback_query.message:
+        user_name = callback_query.from_user.first_name if callback_query.from_user else "Пользователь"
+        user_id = callback_query.from_user.id if callback_query.from_user else "Unknown"
+        
+        await callback_query.message.answer(
+            f"👤 *Ваш профиль*\n\n"
+            f"Имя: {user_name}\n"
+            f"ID: {user_id}\n\n"
+            f"📊 Статистика:\n"
+            f"• Раскладов сделано: 0\n"
+            f"• Избранных предсказаний: 0",
+            parse_mode="Markdown",
+            reply_markup=kb.profile_keyboard
+        )
 
 # Обработчики конкретных раскладов
 @router.callback_query(F.data.startswith('spread_'))
 async def process_spread_selection(callback_query: CallbackQuery, state: FSMContext):
     spread_type = callback_query.data
     
-    spread_names = {
-        'spread_one': '🎴 Расклад на одну карту',
-        'spread_three': '🕒 Прошлое-Настоящее-Будущее',
-        'spread_love': '💖 Расклад на отношения',
-        'spread_career': '💼 Расклад на карьеру',
-        'spread_advice': '🌙 Личный совет',
-        'spread_custom': '🎯 Свободный вопрос'
-    }
-    
-    spread_name = spread_names.get(spread_type, 'Расклад')
+    match spread_type:
+        case 'spread_one':
+            spread_name = '🎴 Расклад на одну карту'
+        case 'spread_three':
+            spread_name = '🕒 Прошлое-Настоящее-Будущее'
+        case 'spread_love':
+            spread_name = '💖 Расклад на отношения'
+        case 'spread_career':
+            spread_name = '💼 Расклад на карьеру'
+        case 'spread_advice':
+            spread_name = '🌙 Личный совет'
+        case 'spread_custom':
+            spread_name = '🎯 Свободный вопрос'
+        case _:
+            spread_name = 'Расклад'
     
     await callback_query.answer(f"Выбран: {spread_name}")
     
@@ -179,51 +207,66 @@ async def process_spread_selection(callback_query: CallbackQuery, state: FSMCont
     await state.update_data(spread_type=spread_type, spread_name=spread_name)
     await state.set_state(TarotReading.waiting_for_question)
     
-    await callback_query.message.edit_text(
-        f"Вы выбрали: *{spread_name}*\n\n"
-        f"📝 Теперь задайте ваш вопрос или опишите ситуацию:",
-        parse_mode="Markdown",
-        reply_markup=kb.cancel_keyboard
-    )
+    if callback_query.message:
+        await callback_query.message.answer(
+            f"Вы выбрали: *{spread_name}*\n\n"
+            f"📝 Теперь задайте ваш вопрос или опишите ситуацию:",
+            parse_mode="Markdown",
+            reply_markup=kb.cancel_keyboard
+        )
 
 # Обработчик тем для раскладов
 @router.callback_query(F.data.startswith('theme_'))
 async def process_theme_selection(callback_query: CallbackQuery, state: FSMContext):
-    theme_index = int(callback_query.data.split('_')[1])
-    themes = ['💖 Любовь и отношения', '💼 Карьера и деньги', '🏥 Здоровье', 
-              '👥 Общение', '🎯 Личностный рост', '🌙 Общий расклад']
-    
-    selected_theme = themes[theme_index]
-    
-    await callback_query.answer(f"Тема: {selected_theme}")
-    
-    # Здесь можно сгенерировать предсказание
-    await callback_query.message.edit_text(
-        f"🔮 *{selected_theme}*\n\n"
-        f"Ваше предсказание:\n\n"
-        f"*Карта: Сила*\n"
-        f"Эта карта говорит о внутренней силе и гармонии...\n\n"
-        f"Помните: Таро показывает возможные пути, но выбор всегда за вами! 💫",
-        parse_mode="Markdown",
-        reply_markup=kb.feedback_keyboard
-    )
+    if not callback_query.data:
+        await callback_query.answer("Ошибка данных")
+        return
+        
+    try:
+        theme_index = int(callback_query.data.split('_')[1])
+        themes = ['💖 Любовь и отношения', '💼 Карьера и деньги', '🏥 Здоровье', 
+                 '👥 Общение', '🎯 Личностный рост', '🌙 Общий расклад']
+        
+        if 0 <= theme_index < len(themes):
+            selected_theme = themes[theme_index]
+        else:
+            selected_theme = '🌙 Общий расклад'
+        
+        await callback_query.answer(f"Тема: {selected_theme}")
+        
+        if callback_query.message:
+            await callback_query.message.answer(
+                f"🔮 *{selected_theme}*\n\n"
+                f"Ваше предсказание:\n\n"
+                f"*Карта: Сила*\n"
+                f"Эта карта говорит о внутренней силе и гармонии...\n\n"
+                f"Помните: Таро показывает возможные пути, но выбор всегда за вами! 💫",
+                parse_mode="Markdown",
+                reply_markup=kb.feedback_keyboard
+            )
+    except (ValueError, IndexError):
+        await callback_query.answer("Ошибка обработки темы")
 
 # Навигация назад
 @router.callback_query(F.data == 'back_to_main')
 async def back_to_main(callback_query: CallbackQuery):
     await callback_query.answer()
-    await callback_query.message.edit_text(
-        "Главное меню:",
-        reply_markup=kb.main_inline
-    )
+
+    if callback_query.message:
+        await callback_query.message.answer(
+            "Главное меню:",
+            reply_markup=kb.main_inline
+        )
 
 @router.callback_query(F.data == 'back_to_spreads')
 async def back_to_spreads(callback_query: CallbackQuery):
     await callback_query.answer()
-    await callback_query.message.edit_text(
-        "Выберите тип расклада:",
-        reply_markup=kb.spreads_main
-    )
+
+    if callback_query.message:
+        await callback_query.message.answer(
+            "Выберите тип расклада:",
+            reply_markup=kb.spreads_main
+        )
 
 # Обработка состояний FSM для раскладов
 @router.message(TarotReading.waiting_for_question)
@@ -257,11 +300,20 @@ async def cancel_action(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith('rate_'))
 async def process_rating(callback_query: CallbackQuery):
-    rating = callback_query.data.split('_')[1]
-    await callback_query.answer(f"Спасибо за оценку: {rating} ⭐")
-    await callback_query.message.edit_text(
-        "Благодарим за обратную связь! 💫"
-    )
+    if not callback_query.data:
+        await callback_query.answer("Ошибка данных")
+        return
+        
+    try:
+        rating = callback_query.data.split('_')[1]
+        await callback_query.answer(f"Спасибо за оценку: {rating} ⭐")
+        
+        if callback_query.message:
+            await callback_query.message.answer(
+                "Благодарим за обратную связь! 💫"
+            )
+    except IndexError:
+        await callback_query.answer("Ошибка обработки оценки")
 
 @router.message(Command('help'))
 async def get_help(message: Message):
