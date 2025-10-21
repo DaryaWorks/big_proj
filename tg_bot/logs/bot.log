@@ -30,3 +30,11 @@
 2025-10-21 19:49:00 | INFO     | __main__:<module>:75 - Bot started successfully
 2025-10-21 19:49:00 | INFO     | __main__:main:62 - Starting bot...
 2025-10-21 19:51:11 | INFO     | __main__:<module>:83 - Bot shutdown completed
+2025-10-21 19:56:30 | INFO     | __main__:setup_logging:55 - Logging setup completed
+2025-10-21 19:56:30 | INFO     | __main__:<module>:75 - Bot started successfully
+2025-10-21 19:56:30 | INFO     | __main__:main:62 - Starting bot...
+2025-10-21 20:05:45 | INFO     | __main__:<module>:83 - Bot shutdown completed
+2025-10-21 20:16:06 | INFO     | __main__:setup_logging:55 - Logging setup completed
+2025-10-21 20:16:06 | INFO     | __main__:<module>:75 - Bot started successfully
+2025-10-21 20:16:06 | INFO     | __main__:main:62 - Starting bot...
+2025-10-21 20:17:12 | INFO     | __main__:<module>:83 - Bot shutdown completed

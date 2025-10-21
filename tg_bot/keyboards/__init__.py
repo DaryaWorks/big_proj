@@ -7,8 +7,7 @@ from .keyboards import (
     feedback_keyboard,
     back_button,
     cancel_keyboard,
-    inline_themes,
-    inline_level
+    inline_themes
 )
 
 __all__ = [
@@ -20,6 +19,5 @@ __all__ = [
     'feedback_keyboard',
     'back_button',
     'cancel_keyboard',
-    'inline_themes',
-    'inline_level'
+    'inline_themes'
 ]

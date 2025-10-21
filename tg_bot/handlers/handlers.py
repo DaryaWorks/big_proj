@@ -310,7 +310,9 @@ async def process_rating(callback_query: CallbackQuery):
         
         if callback_query.message:
             await callback_query.message.answer(
-                "Благодарим за обратную связь! 💫"
+                "Благодарим за обратную связь! 💫\n\n"
+                "Что бы вы хотели сделать дальше?",
+                reply_markup=kb.main_reply 
             )
     except IndexError:
         await callback_query.answer("Ошибка обработки оценки")

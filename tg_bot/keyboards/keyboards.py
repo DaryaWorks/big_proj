@@ -22,10 +22,12 @@ main_reply = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='🔮 Получить предсказание')],
         [KeyboardButton(text='📚 О картах Таро'), KeyboardButton(text='✨ Популярные расклады')],
-        [KeyboardButton(text='❓ Помощь'), KeyboardButton(text='👤 Мой профиль')]
+        [KeyboardButton(text='❓ Помощь'), KeyboardButton(text='👤 Мой профиль')],
+        [KeyboardButton(text='📊 Осталось раскладов')]
     ],
     resize_keyboard=True,
-    one_time_keyboard=False
+    one_time_keyboard=False,
+    persistent=True 
 )
 
 # Меню раскладов
@@ -101,17 +103,21 @@ back_button = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='⬅️ Назад', callback_data='back_to_main')]
 ])
 
-cancel_keyboard = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text='❌ Отмена')]],
-    resize_keyboard=True,
-    one_time_keyboard=True
+cancel_keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text='❌ Отмена', callback_data='cancel_action')]
+    ]
 )
 
-# Старая функция inline_level 
-levels = ['💖 Расклад на отношения', '💼 Расклад на карьеру', '🌙 Личный совет']
+back_to_main_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='🏠 В главное меню', callback_data='back_to_main')]
+])
 
-async def inline_level():
-    keyboard = InlineKeyboardBuilder()
-    for level in levels:
-        keyboard.add(InlineKeyboardButton(text=level, callback_data=f'level_{levels.index(level)}'))
-    return keyboard.adjust(2).as_markup()
+back_to_spreads_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='⬅️ К раскладам', callback_data='back_to_spreads')]
+])
+
+after_feedback_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='🏠 В главное меню', callback_data='back_to_main')],
+    [InlineKeyboardButton(text='🔮 Новый расклад', callback_data='get_prediction')]
+])
