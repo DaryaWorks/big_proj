@@ -16,6 +16,7 @@ BIG_PROJ/
 │ ├── run.py 
 │ └── pycache/
 ├── log/ 
+├── main.py 
 ├── poetry.lock 
 ├── pyproject.toml 
 ├── .gitignore 

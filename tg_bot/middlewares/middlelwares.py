@@ -1,11 +1,27 @@
 from aiogram import BaseMiddleware, types
 from aiogram.fsm.context import FSMContext
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Awaitable
 from typing_extensions import Awaitable
 from datetime import datetime, timedelta
 from collections import defaultdict
 import time
 
+from aiogram import BaseMiddleware
+from aiogram.types import Message
+
+class ModelMiddleware(BaseMiddleware):
+    def __init__(self, tarot_model):
+        self.tarot_model = tarot_model
+    
+    async def __call__(
+        self,
+        handler: Callable[[Message, Dict[str, Any]], Awaitable[Any]],
+        event: Message,
+        data: Dict[str, Any]
+    ) -> Any:
+        # Передаем модель в данные обработчика
+        data['tarot_model'] = self.tarot_model
+        return await handler(event, data)
 
 class ReadingLimiterMiddleware(BaseMiddleware):
     

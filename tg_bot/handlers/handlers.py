@@ -3,15 +3,20 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
+from loguru import logger
 
 from typing import Dict
+
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import keyboards as kb
 from middlewares import ReadingLimiterMiddleware
 
 router = Router() 
 
-# Инициализация middleware
+# Инициализация middleware для лимитов
 reading_limiter = ReadingLimiterMiddleware(max_readings=5, time_window=3600)
 router.message.outer_middleware(reading_limiter)
 
@@ -61,7 +66,7 @@ async def cmd_start(message: Message):
 
 # Обработчики главного меню
 @router.message(F.text == '🔮 Получить предсказание')
-async def get_prediction_menu(message: Message):  # ← ПЕРЕИМЕНОВАНО
+async def get_prediction_menu(message: Message):
     if not message.from_user:
         return
         
@@ -268,23 +273,273 @@ async def back_to_spreads(callback_query: CallbackQuery):
             reply_markup=kb.spreads_main
         )
 
+# Обработка состояний FSM для раскладов - ОБНОВЛЕННЫЙ ОБРАБОТЧИК
+# @router.message(TarotReading.waiting_for_question)
+# async def process_question(message: Message, state: FSMContext, tarot_model):
+#     """Обрабатывает вопрос пользователя и генерирует предсказание через AI модель"""
+    
+#     # Получаем данные из состояния
+#     user_data = await state.get_data()
+#     spread_type = user_data.get('spread_type', 'unknown')
+#     spread_name = user_data.get('spread_name', 'Расклад')
+#     user_question = message.text
+    
+#     # Показываем, что бот думает
+#     thinking_msg = await message.answer("🔮 Карты перемешиваются... Таро обдумывает ваш вопрос...")
+    
+#     try:
+#         if not tarot_model:
+#             await thinking_msg.delete()
+#             await message.answer("❌ Модель временно недоступна. Попробуйте позже.")
+#             await state.clear()
+#             return
+        
+#         # Генерируем предсказание через модель
+#         if message.from_user:
+#             logger.info(f"🔄 Генерируем предсказание для пользователя {message.from_user.id}: {user_question}")
+#         prediction = await tarot_model.generate_prediction(
+#             question=user_question,
+#             spread_type=spread_type,
+#             spread_name=spread_name
+#         )
+        
+#         # Удаляем сообщение "думаю"
+#         await thinking_msg.delete()
+#         if message.from_user:
+#             logger.info(f"✅ Предсказание сгенерировано для пользователя {message.from_user.id}")
+        
+#         # Отправляем предсказание пользователю
+#         await message.answer(
+#             f"{prediction}\n\n"
+#             f"💫 *Помните:* Таро показывает возможные пути, но выбор всегда за вами!",
+#             parse_mode="Markdown",
+#             reply_markup=kb.feedback_keyboard
+#         )
+        
+#     except Exception as e:
+#         # Удаляем сообщение "думаю" даже при ошибке
+#         await thinking_msg.delete()
+        
+#         if message.from_user:
+#             logger.error(f"❌ Ошибка генерации предсказания для пользователя {message.from_user.id}: {e}")
+        
+#         # Отправляем запасное предсказание
+#         await message.answer(
+#             f"🔮 *{spread_name}*\n\n"
+#             f"*Ваш вопрос:* {user_question}\n\n"
+#             f"*Предсказание:*\n"
+#             f"Карты говорят, что вас ждут позитивные изменения...\n\n"
+#             f"💫 *Совет:* Доверьтесь своей интуиции!",
+#             parse_mode="Markdown",
+#             reply_markup=kb.feedback_keyboard
+#         )
+    
+#     finally:
+#         # Всегда очищаем состояние
+#         await state.clear()
+
 # Обработка состояний FSM для раскладов
 @router.message(TarotReading.waiting_for_question)
-async def process_question(message: Message, state: FSMContext):
+async def process_question(message: Message, state: FSMContext, tarot_model):
+    """Обрабатывает вопрос пользователя и генерирует предсказание через AI модель"""
+    
+    # Проверяем наличие пользователя
+    if not message.from_user:
+        await message.answer("❌ Не удалось определить пользователя")
+        await state.clear()
+        return
+    
+    # Получаем данные из состояния
     user_data = await state.get_data()
+    spread_type = user_data.get('spread_type', 'unknown')
     spread_name = user_data.get('spread_name', 'Расклад')
+    user_question = message.text
     
-    await message.answer(
-        f"🔮 *{spread_name}*\n\n"
-        f"*Ваш вопрос:* {message.text}\n\n"
-        f"*Предсказание:*\n"
-        f"Карты говорят, что вас ждут позитивные изменения...\n\n"
-        f"💫 *Совет:* Доверьтесь своей интуиции!",
-        parse_mode="Markdown",
-        reply_markup=kb.feedback_keyboard
-    )
+    # Показываем, что бот думает
+    thinking_msg = None
+    try:
+        thinking_msg = await message.answer("🔮 Карты перемешиваются... Таро обдумывает ваш вопрос...")
+    except Exception as e:
+        logger.warning(f"Не удалось отправить сообщение 'думаю': {e}")
     
-    await state.clear()
+    try:
+        if not tarot_model:
+            await safe_delete_message(thinking_msg)
+            await message.answer("❌ Модель временно недоступна. Попробуйте позже.")
+            await state.clear()
+            return
+        
+        # Генерируем предсказание через модель
+        user_id = message.from_user.id
+        logger.info(f"🔄 Генерируем предсказание для пользователя {user_id}: {user_question}")
+        prediction = await tarot_model.generate_prediction(
+            question=user_question,
+            spread_type=spread_type,
+            spread_name=spread_name
+        )
+        
+        # Удаляем сообщение "думаю" если оно существует
+        await safe_delete_message(thinking_msg)
+        
+        logger.info(f"✅ Предсказание сгенерировано для пользователя {user_id}")
+        
+        # Проверяем длину предсказания и разбиваем если нужно
+        if len(prediction) > 4000:
+            prediction = truncate_prediction(prediction)
+        
+        # Отправляем предсказание пользователю
+        if user_question:
+            await send_prediction_safely(
+                message=message,
+                prediction=prediction,
+                spread_name=spread_name,
+                user_question=user_question
+            )
+        
+    except Exception as e:
+        # Удаляем сообщение "думаю" даже при ошибке
+        await safe_delete_message(thinking_msg)
+        
+        user_id = message.from_user.id if message.from_user else "unknown"
+        logger.error(f"❌ Ошибка генерации предсказания для пользователя {user_id}: {e}")
+        
+        # Отправляем запасное предсказание
+        await message.answer(
+            f"🔮 *{spread_name}*\n\n"
+            f"*Ваш вопрос:* {user_question}\n\n"
+            f"*Предсказание:*\n"
+            f"Карты говорят, что вас ждут позитивные изменения...\n\n"
+            f"💫 *Совет:* Доверьтесь своей интуиции!",
+            parse_mode="Markdown",
+            reply_markup=kb.feedback_keyboard
+        )
+    
+    finally:
+        # Всегда очищаем состояние
+        await state.clear()
+
+async def safe_delete_message(message: Message | None):
+    """Безопасно удаляет сообщение, если оно существует"""
+    if message:
+        try:
+            await message.delete()
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение: {e}")
+
+def truncate_prediction(prediction: str, max_length: int = 4000) -> str:
+    """Обрезает предсказание если оно слишком длинное"""
+    if len(prediction) <= max_length:
+        return prediction
+    
+    # Находим место для обрезки (после последнего предложения)
+    truncated = prediction[:max_length-100]  # Оставляем запас
+    last_period = truncated.rfind('.')
+    last_newline = truncated.rfind('\n')
+    
+    cut_position = max(last_period, last_newline)
+    if cut_position > max_length * 0.7:  # Если нашли хорошее место для обрезки
+        truncated = truncated[:cut_position + 1]
+    
+    truncated += f"\n\n... (сообщение сокращено)\n💫 *Помните:* Таро показывает возможные пути, но выбор всегда за вами!"
+    
+    return truncated
+
+async def send_prediction_safely(message: Message, prediction: str, spread_name: str, user_question: str):
+    """Безопасно отправляет предсказание, разбивая на части если нужно"""
+    try:
+        # Первая часть с заголовком
+        header = f"🔮 *{spread_name}*\n\n*Ваш вопрос:* {user_question}\n\n*Предсказание:*\n"
+        
+        # Если всё сообщение короткое, отправляем одним куском
+        if len(header) + len(prediction) < 4000:
+            await message.answer(
+                f"{header}{prediction}\n\n💫 *Помните:* Таро показывает возможные пути, но выбор всегда за вами!",
+                parse_mode="Markdown",
+                reply_markup=kb.feedback_keyboard
+            )
+        else:
+            # Отправляем заголовок отдельно
+            await message.answer(
+                header,
+                parse_mode="Markdown"
+            )
+            
+            # Разбиваем предсказание на части
+            chunks = split_text(prediction, max_chunk_size=3500)
+            for i, chunk in enumerate(chunks):
+                if i == len(chunks) - 1:  # Последняя часть
+                    await message.answer(
+                        f"{chunk}\n\n💫 *Помните:* Таро показывает возможные пути, но выбор всегда за вами!",
+                        parse_mode="Markdown",
+                        reply_markup=kb.feedback_keyboard
+                    )
+                else:
+                    await message.answer(
+                        chunk,
+                        parse_mode="Markdown"
+                    )
+                    
+    except Exception as e:
+        logger.error(f"Ошибка при отправке предсказания: {e}")
+        # Запасной вариант - короткое сообщение
+        await message.answer(
+            f"🔮 *{spread_name}*\n\n"
+            f"Предсказание готово! К сожалению, произошла техническая ошибка при отправке полного текста.\n\n"
+            f"💫 Карты советуют доверять своей интуиции!",
+            parse_mode="Markdown",
+            reply_markup=kb.feedback_keyboard
+        )
+
+def split_text(text: str, max_chunk_size: int = 3500) -> list[str]:
+    """Разбивает текст на части по границам предложений"""
+    chunks = []
+    current_chunk = ""
+    
+    # Разбиваем по предложениям если возможно
+    sentences = text.split('. ')
+    
+    for sentence in sentences:
+        # Если добавляя предложение мы превысим лимит, сохраняем текущий chunk
+        if len(current_chunk) + len(sentence) + 2 > max_chunk_size and current_chunk:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence + ". "
+        else:
+            current_chunk += sentence + ". "
+    
+    # Добавляем последний chunk
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    # Если текст без точек или очень длинные предложения, разбиваем по длине
+    if not chunks or any(len(chunk) > max_chunk_size for chunk in chunks):
+        chunks = []
+        for i in range(0, len(text), max_chunk_size):
+            chunk = text[i:i + max_chunk_size]
+            # Стараемся не разрывать слова
+            if i + max_chunk_size < len(text):
+                last_space = chunk.rfind(' ')
+                if last_space > max_chunk_size * 0.8:
+                    chunk = chunk[:last_space]
+            chunks.append(chunk)
+    
+    return chunks
+
+# Обработчик отмены
+@router.callback_query(F.data == 'cancel_action')
+async def cancel_callback(callback_query: CallbackQuery, state: FSMContext):
+    """Обработчик inline-кнопки отмены"""
+    current_state = await state.get_state()
+    if current_state:
+        await state.clear()
+    
+    await callback_query.answer("Действие отменено")
+    
+    if callback_query.message:
+        await callback_query.message.answer(
+            "❌ Действие отменено.\n\n"
+            "Выберите что-нибудь из меню:",
+            reply_markup=kb.main_reply
+        )
 
 @router.message(F.text == '❌ Отмена')
 async def cancel_action(message: Message, state: FSMContext):
@@ -294,7 +549,8 @@ async def cancel_action(message: Message, state: FSMContext):
     
     await state.clear()
     await message.answer(
-        "Действие отменено.",
+        "❌ Действие отменено.\n\n"
+        "Выберите что-нибудь из меню:",
         reply_markup=kb.main_reply
     )
 
